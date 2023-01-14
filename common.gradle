@@ -1,0 +1,44 @@
+import groovy.json.JsonBuilder
+
+//apply plugin: 'org.jmailen.kotlinter'
+apply plugin: 'org.jetbrains.kotlin.js'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation(project(":core"))
+    implementation(libs.bundles.common)
+}
+
+kotlin {
+    js {
+        binaries.executable()
+        browser()
+    }
+    sourceSets {
+        main {
+            kotlin.srcDir('src')
+            resources.srcDir('res')
+        }
+    }
+}
+
+tasks.register('generateSourceJson') {
+    def json = new JsonBuilder()
+    json.info {
+        id pkgNameSuffix
+        lang pkgNameSuffix.tokenize('.').first()
+        name extName
+        version extVersionCode
+        nsfw ext.properties.getOrDefault("isNsfw", false) ? 2 : 0
+    }
+    def sourceJson = new File("$projectDir/build/distributions/source.json")
+    sourceJson.write(json.toString())
+}
+
+generateSourceJson.dependsOn(compileKotlinJs)
+
+//compileKotlinJs.dependsOn(lintKotlin)
+//lintKotlin.dependsOn(formatKotlin)
