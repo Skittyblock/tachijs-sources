@@ -28,12 +28,14 @@ kotlin {
 tasks.register('generateSourceJson') {
     def json = new JsonBuilder()
     json.info {
-        id pkgNameSuffix
+        id pkgNameSuffix + ".tachi"
         lang pkgNameSuffix.tokenize('.').first()
         name extName
         version extVersionCode
         nsfw ext.properties.getOrDefault("isNsfw", false) ? 2 : 0
+        module pkgNameSuffix.tokenize('.').last() + ".eu.kanade.tachiyomi.extension." + pkgNameSuffix
     }
+    mkdir("$projectDir/build/distributions")
     def sourceJson = new File("$projectDir/build/distributions/source.json")
     sourceJson.write(json.toString())
 }

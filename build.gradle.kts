@@ -1,5 +1,5 @@
-import org.gradle.kotlin.dsl.support.zipTo
-import org.gradle.util.TextUtil.normaliseFileSeparators
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 buildscript {
     repositories {
@@ -23,6 +23,55 @@ allprojects {
     }
 }
 
+fun zipFiles(zipOut: ZipOutputStream, sourceFile: File, parentDirPath: String) {
+    val data = ByteArray(2048)
+
+    for (f in sourceFile.listFiles()!!) {
+        if (f.isDirectory) {
+            val entry = ZipEntry(f.name + File.separator)
+            entry.time = f.lastModified()
+            entry.isDirectory
+            entry.size = f.length()
+            zipOut.putNextEntry(entry)
+            zipFiles(zipOut, f, f.name)
+        } else {
+            java.io.FileInputStream(f).use { fi ->
+                java.io.BufferedInputStream(fi).use { origin ->
+                    val path = parentDirPath + File.separator + f.name
+                    val entry = ZipEntry(path)
+                    entry.time = f.lastModified()
+                    entry.isDirectory
+                    entry.size = f.length()
+                    zipOut.putNextEntry(entry)
+                    while (true) {
+                        val readBytes = origin.read(data)
+                        if (readBytes == -1) {
+                            break
+                        }
+                        zipOut.write(data, 0, readBytes)
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun zipDir(directory: String, zipFile: String) {
+    val sourceFile = File(directory)
+    if (!sourceFile.isDirectory) return
+
+    ZipOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(zipFile))).use { out ->
+        out.use {
+            val entry = ZipEntry(sourceFile.name + File.separator)
+            entry.time = sourceFile.lastModified()
+            entry.isDirectory
+            entry.size = sourceFile.length()
+            it.putNextEntry(entry)
+            zipFiles(it, sourceFile, sourceFile.name)
+        }
+    }
+}
+
 tasks.register("buildOutput") {
     doLast {
         mkdir("./build/output")
@@ -32,7 +81,7 @@ tasks.register("buildOutput") {
             for (subdir in dir.listFiles()!!) {
                 if (!subdir.isDirectory) continue
                 val id = "${dir.name}.${subdir.name}"
-                val outDir = "./build/output/$id"
+                val outDir = "./build/output/Payload"
                 // create tmp outdir
                 mkdir(outDir)
                 // copy files to output dir
@@ -44,16 +93,16 @@ tasks.register("buildOutput") {
                     rename("web_hi_res_512.png", "Icon.png")
                 }
                 // zip files into aix
-                val files = sequenceOf(
-                    File("$outDir/main.js"),
-                    File("$outDir/Icon.png")
-                )
-                val entries = files.map { f ->
-                    val path = f.relativeTo(File(outDir)).path
-                    val bytes = f.readBytes()
-                    normaliseFileSeparators(path) to bytes
+                zipDir(outDir, "./build/output/Payload.zip")
+                // rename Payload.zip
+                copy {
+                    from("./build/output")
+                    include("Payload.zip")
+                    into("./build/output")
+                    rename("Payload.zip", "$id.aix")
                 }
-                zipTo(File("./build/output/$id.aix"), entries)
+                // delete Payload.zip
+                delete("$outDir.zip")
                 // delete tmp outdir
                 delete(outDir)
             }
