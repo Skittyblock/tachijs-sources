@@ -1,0 +1,70 @@
+name: Build sources
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+        
+      - name: Validate Gradle Wrapper
+        uses: gradle/wrapper-validation-action@v1
+        
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: 11
+          distribution: adopt
+        
+      - name: Install aidoku-cli
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo ln -s $(which wasm-ld-13 || which wasm-ld-12 || which wasm-ld-11 || which wasm-ld-10) /usr/bin/wasm-ld
+
+          AIDOKU_CLI_VER=$(gh api repos/Aidoku/aidoku-cli/releases -q '.[0].tag_name')
+          gh release download -R Aidoku/aidoku-cli "$AIDOKU_CLI_VER" -p *_amd64.deb
+          sudo dpkg -i "aidoku-cli_${AIDOKU_CLI_VER:1}_linux_amd64.deb"
+          
+      - name: Build sources
+        uses: gradle/gradle-command-action@v2
+        with:
+          arguments: buildOutput
+          
+      - name: Build source list
+        run: |
+          aidoku build ./build/output/*.aix
+          
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4.2.5
+        if: ${{ github.ref == 'refs/heads/main' }}
+        with:
+          branch: gh-pages
+          folder: public
+          git-config-name: GitHub Actions
+          git-config-email: github-actions[bot]@users.noreply.github.com
+          commit-message: Update source list
+          single-commit: true
+          
+      - name: Upload packages as artifact
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: packages
+          path: public/sources/*.aix
+          if-no-files-found: ignore
+          
+      - name: Upload to gh-pages branch
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: gh-pages
+          path: public
+          if-no-files-found: ignore
+
